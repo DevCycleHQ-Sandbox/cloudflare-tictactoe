@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<title>Tic Tac Toe Game</title>
+		<script src="https://cdn.tailwindcss.com"></script>
+	</head>
+	<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+		<div class="bg-white shadow-md rounded-lg p-6">
+			<h1 class="text-center text-2xl font-bold mb-4">Tic Tac Toe</h1>
+
+			<!-- Room code section -->
+			<div class="mb-4">
+				<button id="createRoom" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2">Create Room</button>
+				<input id="roomCode" type="text" placeholder="Enter room code" class="border rounded px-2 py-1"/>
+				<button id="joinRoom" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 ml-2">Join Room</button>
+			</div>
+			<p id="roomMessage" class="text-center text-sm text-gray-600 mb-4"></p>
+
+			<!-- Game board (initially hidden) -->
+			<div id="gameContainer" class="hidden">
+				<div id="board" class="grid grid-cols-3 gap-2 w-48 mx-auto">
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="0"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="1"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="2"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="3"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="4"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="5"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="6"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="7"></div>
+					<div class="cell h-16 w-16 bg-gray-200 flex items-center justify-center text-xl font-bold cursor-pointer" data-index="8"></div>
+				</div>
+				<p id="message" class="text-center text-lg font-semibold mt-4"></p>
+				<button id="restart" class="block mx-auto mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">Restart</button>
+			</div>
+		</div>
+
+		<script>
+			document.addEventListener('DOMContentLoaded', () => {
+				const cells = document.querySelectorAll('.cell');
+				const message = document.getElementById('message');
+				const restartButton = document.getElementById('restart');
+				let board = [
+					'',
+					'',
+					'',
+					'',
+					'',
+					'',
+					'',
+					'',
+					''
+				];
+				let currentPlayer = 'X';
+				let gameActive = true;
+				let socket; // Declare socket variable in a higher scope
+
+				const winningCombinations = [
+					[
+						0, 1, 2
+					],
+					[
+						3, 4, 5
+					],
+					[
+						6, 7, 8
+					],
+					[
+						0, 3, 6
+					],
+					[
+						1, 4, 7
+					],
+					[
+						2, 5, 8
+					],
+					[
+						0, 4, 8
+					],
+					[
+						2, 4, 6
+					]
+				];
+
+				function handleCellClick(e) {
+					const index = e
+						.target
+						.getAttribute('data-index');
+					if (board[index] === '' && gameActive) {
+						board[index] = currentPlayer;
+						e.target.textContent = currentPlayer;
+						checkResult();
+						currentPlayer = currentPlayer === 'X'
+							? 'O'
+							: 'X';
+
+						// Send updated game state to the server
+						if (socket && socket.readyState === WebSocket.OPEN) {
+							socket.send(JSON.stringify({type: 'move', board: board, currentPlayer: currentPlayer}));
+						}
+					}
+				}
+
+				function checkResult() {
+					for (const combination of winningCombinations) {
+						const [a, b, c] = combination;
+						if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+							gameActive = false;
+							message.textContent = `${board[a]} wins!`;
+							return;
+						}
+					}
+					if (!board.includes('')) {
+						gameActive = false;
+						message.textContent = 'Its a draw!';
+					}
+				}
+
+				function restartGame() {
+					board = [
+						'',
+						'',
+						'',
+						'',
+						'',
+						'',
+						'',
+						'',
+						''
+					];
+					currentPlayer = 'X';
+					gameActive = true;
+					message.textContent = '';
+					cells.forEach((cell) => (cell.textContent = ''));
+				}
+
+				cells.forEach((cell) => cell.addEventListener('click', handleCellClick));
+				restartButton.addEventListener('click', restartGame);
+
+				// New code for room creation
+				const createRoomButton = document.getElementById('createRoom');
+				const roomCodeInput = document.getElementById('roomCode');
+				const roomMessage = document.getElementById('roomMessage');
+
+				function generateRoomCode() {
+					return Math
+						.random()
+						.toString(36)
+						.substring(2, 8)
+						.toUpperCase();
+				}
+
+				createRoomButton.addEventListener('click', () => {
+					const roomCode = generateRoomCode();
+					roomCodeInput.value = roomCode;
+					roomMessage.textContent = `Room created! Share this code with your opponent.`;
+				});
+
+				// New code to show the game board and send a fetch request when joining a room
+				const joinRoomButton = document.getElementById('joinRoom');
+				const gameContainer = document.getElementById('gameContainer');
+
+				function updateGameBoard(newBoard, newCurrentPlayer) {
+					console.log('Updating game board:', newBoard, newCurrentPlayer);
+					board = newBoard;
+					currentPlayer = newCurrentPlayer;
+					cells.forEach((cell, index) => {
+						cell.textContent = board[index];
+					});
+					checkResult();
+				}
+
+				joinRoomButton.addEventListener('click', () => {
+					const roomCode = roomCodeInput
+						.value
+						.trim();
+					if (roomCode) {
+						// Construct the WebSocket URL
+						const protocol = window.location.protocol === 'https:'
+							? 'wss:'
+							: 'ws:';
+						const wsUrl = `${protocol}//${window.location.host}/websocket`;
+
+						// Create a new WebSocket connection
+						socket = new WebSocket(wsUrl);
+
+						socket.onopen = (event) => {
+							console.log('WebSocket connection opened:', event);
+							// Send the room code to the server
+							socket.send(JSON.stringify({type: 'join', roomCode: roomCode}));
+							gameContainer
+								.classList
+								.remove('hidden');
+							roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
+						};
+
+						socket.onmessage = (event) => {
+							const data = JSON.parse(JSON.parse(event.data));
+							if (data.type === 'joined') {
+								roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
+							} else if (data.type === 'move') {
+								updateGameBoard(data.board, data.currentPlayer);
+								roomMessage.textContent = `It's ${data.currentPlayer}'s turn`;
+							}
+							// Add more message handling as needed
+						};
+
+						socket.onerror = (error) => {
+							console.error('WebSocket error:', error);
+							roomMessage.textContent = 'An error occurred. Please try again.';
+						};
+
+						socket.onclose = (event) => {
+							console.log('WebSocket connection closed:', event);
+							roomMessage.textContent = 'Connection closed. Please refresh and try again.';
+						};
+					} else {
+						roomMessage.textContent = 'Please enter a room code.';
+					}
+				});
+			});
+		</script>
+	</body>
+</html>
