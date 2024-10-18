@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<meta charset="UTF-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Tic Tac Toe Game</title>
 		<script src="https://cdn.tailwindcss.com"></script>
 	</head>
@@ -13,7 +13,7 @@
 			<!-- Room code section -->
 			<div class="mb-4">
 				<button id="createRoom" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 mr-2">Create Room</button>
-				<input id="roomCode" type="text" placeholder="Enter room code" class="border rounded px-2 py-1"/>
+				<input id="roomCode" type="text" placeholder="Enter room code" class="border rounded px-2 py-1" />
 				<button id="joinRoom" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 ml-2">Join Room</button>
 			</div>
 			<p id="roomMessage" class="text-center text-sm text-gray-600 mb-4"></p>
@@ -41,63 +41,33 @@
 				const cells = document.querySelectorAll('.cell');
 				const message = document.getElementById('message');
 				const restartButton = document.getElementById('restart');
-				let board = [
-					'',
-					'',
-					'',
-					'',
-					'',
-					'',
-					'',
-					'',
-					''
-				];
+				let board = ['', '', '', '', '', '', '', '', ''];
 				let currentPlayer = 'X';
 				let gameActive = true;
 				let socket; // Declare socket variable in a higher scope
 
 				const winningCombinations = [
-					[
-						0, 1, 2
-					],
-					[
-						3, 4, 5
-					],
-					[
-						6, 7, 8
-					],
-					[
-						0, 3, 6
-					],
-					[
-						1, 4, 7
-					],
-					[
-						2, 5, 8
-					],
-					[
-						0, 4, 8
-					],
-					[
-						2, 4, 6
-					]
+					[0, 1, 2],
+					[3, 4, 5],
+					[6, 7, 8],
+					[0, 3, 6],
+					[1, 4, 7],
+					[2, 5, 8],
+					[0, 4, 8],
+					[2, 4, 6],
 				];
 
 				function handleCellClick(e) {
-					const index = e
-						.target
-						.getAttribute('data-index');
+					const index = e.target.getAttribute('data-index');
 					if (board[index] === '' && gameActive) {
 						board[index] = currentPlayer;
 						e.target.textContent = currentPlayer;
 						checkResult();
-						currentPlayer = currentPlayer === 'X'
-							? 'O'
-							: 'X';
+						currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
 
 						// Send updated game state to the server
 						if (socket && socket.readyState === WebSocket.OPEN) {
-							socket.send(JSON.stringify({type: 'move', board: board, currentPlayer: currentPlayer}));
+							socket.send(JSON.stringify({ type: 'move', board: board, currentPlayer: currentPlayer }));
 						}
 					}
 				}
@@ -118,17 +88,7 @@
 				}
 
 				function restartGame() {
-					board = [
-						'',
-						'',
-						'',
-						'',
-						'',
-						'',
-						'',
-						'',
-						''
-					];
+					board = ['', '', '', '', '', '', '', '', ''];
 					currentPlayer = 'X';
 					gameActive = true;
 					message.textContent = '';
@@ -144,11 +104,7 @@
 				const roomMessage = document.getElementById('roomMessage');
 
 				function generateRoomCode() {
-					return Math
-						.random()
-						.toString(36)
-						.substring(2, 8)
-						.toUpperCase();
+					return Math.random().toString(36).substring(2, 8).toUpperCase();
 				}
 
 				createRoomButton.addEventListener('click', () => {
@@ -172,14 +128,10 @@
 				}
 
 				joinRoomButton.addEventListener('click', () => {
-					const roomCode = roomCodeInput
-						.value
-						.trim();
+					const roomCode = roomCodeInput.value.trim();
 					if (roomCode) {
 						// Construct the WebSocket URL
-						const protocol = window.location.protocol === 'https:'
-							? 'wss:'
-							: 'ws:';
+						const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 						const wsUrl = `${protocol}//${window.location.host}/websocket`;
 
 						// Create a new WebSocket connection
@@ -188,22 +140,21 @@
 						socket.onopen = (event) => {
 							console.log('WebSocket connection opened:', event);
 							// Send the room code to the server
-							socket.send(JSON.stringify({type: 'join', roomCode: roomCode}));
-							gameContainer
-								.classList
-								.remove('hidden');
-							roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
+							socket.send(JSON.stringify({ type: 'join', roomCode: roomCode }));
+							// roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
 						};
 
 						socket.onmessage = (event) => {
-							const data = JSON.parse(JSON.parse(event.data));
-							if (data.type === 'joined') {
+							const data = JSON.parse(event.data);
+							if (data.type === 'join') {
 								roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
+								gameContainer.classList.remove('hidden');
 							} else if (data.type === 'move') {
 								updateGameBoard(data.board, data.currentPlayer);
 								roomMessage.textContent = `It's ${data.currentPlayer}'s turn`;
+							} else if (data.type === 'full') {
+								roomMessage.textContent = 'Room is full. Please create a new room.';
 							}
-							// Add more message handling as needed
 						};
 
 						socket.onerror = (error) => {
@@ -213,7 +164,11 @@
 
 						socket.onclose = (event) => {
 							console.log('WebSocket connection closed:', event);
-							roomMessage.textContent = 'Connection closed. Please refresh and try again.';
+							if (event.reason === 'Room is full') {
+								roomMessage.textContent = 'Room is full. Please create a new room.';
+							} else {
+								roomMessage.textContent = 'Connection closed. Please refresh and try again.';
+							}
 						};
 					} else {
 						roomMessage.textContent = 'Please enter a room code.';
