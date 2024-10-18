@@ -32,11 +32,12 @@ export class MyDurableObject extends DurableObject {
 
 	webSocketMessage(ws: WebSocket, message: string) {
 		// Check how many WebSocket connections are open
-		if (this.ctx.getWebSockets().length > 2) {
+		if (this.session.size > 2) {
 			this.broadcast(ws, {
 				type: 'full',
 				message: 'Room is full',
 			});
+			// if more than 2, close the connection
 			ws.close(1000, 'Room is full');
 			return;
 		}
@@ -50,22 +51,62 @@ export class MyDurableObject extends DurableObject {
 		this.broadcast(ws, JSON.parse(message));
 	}
 
-	private broadcast(ws: WebSocket, message: object) {
+	private broadcast(sender: WebSocket, message: { type: string; [key: string]: any }) {
 		const { type } = message;
+
+		// Check the message type
 		if (type === 'join') {
-			const id = this.session.get(ws).id;
-			ws.send(
-				JSON.stringify({
-					type: 'join',
-					message: 'Welcome to the room',
-					senderId: id,
-				})
-			);
+			const id = this.session.get(sender).id;
+
+			// Set X or O
+			const player = this.session.size === 1 ? 'X' : 'O';
+
+			// Check the size of the session
+			if (this.session.size === 2) {
+				// Assign the player to the session
+				sender.send(
+					JSON.stringify({
+						type: 'join',
+						message: 'Welcome to the room',
+						senderId: id,
+						player,
+					})
+				);
+				// Start the game since there are two players
+				this.ctx.getWebSockets().forEach((ws) => {
+					ws.send(
+						JSON.stringify({
+							type: 'start',
+							message: 'Start game',
+						})
+					);
+				});
+			} else {
+				// If only one player, send a message to the player
+				sender.send(
+					JSON.stringify({
+						type: 'join',
+						message: 'Welcome to the room',
+						senderId: id,
+						player,
+					})
+				);
+			}
 		} else if (type === 'full') {
-			ws.send(JSON.stringify(message));
+			// if the room is full, send a message to the player
+			sender.send(JSON.stringify(message));
+		} else if (type === 'move') {
+			// Send the updated board to all players
+			this.ctx.getWebSockets().forEach((ws) => {
+				ws.send(JSON.stringify(message));
+			});
+		} else if (type === 'restart') {
+			// Restart the game for all players
+			this.ctx.getWebSockets().forEach((ws) => {
+				ws.send(JSON.stringify(message));
+			});
 		}
 	}
-
 	webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
 		ws.close(code, 'Durable Object is closing WebSocket');
 	}

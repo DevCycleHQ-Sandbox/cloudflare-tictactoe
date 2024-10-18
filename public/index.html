@@ -45,6 +45,7 @@
 				let currentPlayer = 'X';
 				let gameActive = true;
 				let socket; // Declare socket variable in a higher scope
+				let myPlayer = '';
 
 				const winningCombinations = [
 					[0, 1, 2],
@@ -59,7 +60,7 @@
 
 				function handleCellClick(e) {
 					const index = e.target.getAttribute('data-index');
-					if (board[index] === '' && gameActive) {
+					if (board[index] === '' && gameActive && currentPlayer === myPlayer) {
 						board[index] = currentPlayer;
 						e.target.textContent = currentPlayer;
 						checkResult();
@@ -90,9 +91,10 @@
 				function restartGame() {
 					board = ['', '', '', '', '', '', '', '', ''];
 					currentPlayer = 'X';
-					gameActive = true;
-					message.textContent = '';
-					cells.forEach((cell) => (cell.textContent = ''));
+					// cells.forEach((cell) => (cell.textContent = ''));
+					if (socket && socket.readyState === WebSocket.OPEN) {
+						socket.send(JSON.stringify({ type: 'restart', board: board, currentPlayer: currentPlayer }));
+					}
 				}
 
 				cells.forEach((cell) => cell.addEventListener('click', handleCellClick));
@@ -118,7 +120,6 @@
 				const gameContainer = document.getElementById('gameContainer');
 
 				function updateGameBoard(newBoard, newCurrentPlayer) {
-					console.log('Updating game board:', newBoard, newCurrentPlayer);
 					board = newBoard;
 					currentPlayer = newCurrentPlayer;
 					cells.forEach((cell, index) => {
@@ -147,13 +148,23 @@
 						socket.onmessage = (event) => {
 							const data = JSON.parse(event.data);
 							if (data.type === 'join') {
-								roomMessage.textContent = `Joined room ${roomCode}. Game started!`;
+								myPlayer = data.player;
+								roomMessage.textContent = `Joined room ${roomCode}. You are playing as ${myPlayer}`;
+							} else if (data.type === 'start') {
+								roomMessage.textContent = 'X plays first';
 								gameContainer.classList.remove('hidden');
 							} else if (data.type === 'move') {
 								updateGameBoard(data.board, data.currentPlayer);
-								roomMessage.textContent = `It's ${data.currentPlayer}'s turn`;
+								const p = data.currentPlayer === myPlayer ? 'your' : data.currentPlayer + "'s";
+								roomMessage.textContent = `It's ${p} turn`;
 							} else if (data.type === 'full') {
 								roomMessage.textContent = 'Room is full. Please create a new room.';
+							} else if (data.type === 'restart') {
+								updateGameBoard(data.board, data.currentPlayer);
+								gameActive = true;
+								const p = data.currentPlayer === myPlayer ? 'your' : data.currentPlayer + "'s";
+								roomMessage.textContent = `It's ${p} turn`;
+								message.textContent = '';
 							}
 						};
 
